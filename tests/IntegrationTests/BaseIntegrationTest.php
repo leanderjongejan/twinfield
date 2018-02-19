@@ -5,8 +5,8 @@ namespace PhpTwinfield\IntegrationTests;
 use PhpTwinfield\Enums\Services;
 use PhpTwinfield\Office;
 use PhpTwinfield\Response\Response;
-use PhpTwinfield\Secure\Connection;
-use PhpTwinfield\Secure\SoapClient;
+use PhpTwinfield\Secure\AuthenticatedConnection;
+use PhpTwinfield\Services\FinderService;
 use PhpTwinfield\Services\ProcessXmlService;
 use PHPUnit\Framework\TestCase;
 
@@ -18,14 +18,19 @@ abstract class BaseIntegrationTest extends TestCase
     protected $office;
 
     /**
-     * @var Connection|\PHPUnit_Framework_MockObject_MockObject
+     * @var AuthenticatedConnection|\PHPUnit_Framework_MockObject_MockObject
      */
-    protected $login;
+    protected $connection;
 
     /**
-     * @var SoapClient|\PHPUnit_Framework_MockObject_MockObject
+     * @var ProcessXmlService|\PHPUnit_Framework_MockObject_MockObject
      */
-    protected $client;
+    protected $processXmlService;
+
+    /**
+     * @var FinderService|\PHPUnit_Framework_MockObject_MockObject
+     */
+    protected $finderService;
 
     protected function setUp()
     {
@@ -34,17 +39,26 @@ abstract class BaseIntegrationTest extends TestCase
         $this->office = new Office();
         $this->office->setCode("OFFICE");
 
-        $this->client = $this->createMock(ProcessXmlService::class);
+        $this->processXmlService = $this->createPartialMock(ProcessXmlService::class, ['sendDocument']);
+        $this->finderService     = $this->createPartialMock(FinderService::class, ['searchFinder']);
 
-        $this->login  = $this->createMock(Connection::class);
-
-        $this->login->expects($this->any())
+        $this->connection  = $this->createMock(AuthenticatedConnection::class);
+        $this->connection->expects($this->any())
             ->method("getAuthenticatedClient")
-            ->with(Services::PROCESSXML())
-            ->willReturn($this->client);
+            ->willReturnCallback(function (Services $service) {
+                switch ($service->getValue()) {
+                    case Services::PROCESSXML()->getValue():
+                        return $this->processXmlService;
+
+                    case Services::FINDER()->getValue():
+                        return $this->finderService;
+                }
+
+                throw new \InvalidArgumentException("Unknown service {$service->getValue()}");
+            });
     }
 
-    final protected function getSuccessfulResponse(): Response
+    protected function getSuccessfulResponse(): Response
     {
         return Response::fromString('<dimension result="1" />');
     }

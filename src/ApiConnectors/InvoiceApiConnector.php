@@ -8,6 +8,8 @@ use PhpTwinfield\DomDocuments\InvoicesDocument;
 use PhpTwinfield\Mappers\InvoiceMapper;
 use PhpTwinfield\Office;
 use PhpTwinfield\Request as Request;
+use PhpTwinfield\Response\MappedResponseCollection;
+use PhpTwinfield\Response\Response;
 use Webmozart\Assert\Assert;
 
 /**
@@ -20,7 +22,7 @@ use Webmozart\Assert\Assert;
  * @author Leon Rowland <leon@rowland.nl>
  * @copyright (c) 2013, Pronamic
  */
-class InvoiceApiConnector extends ProcessXmlApiConnector
+class InvoiceApiConnector extends BaseApiConnector
 {
     /**
      * Requires a specific invoice based off the passed in code, invoiceNumber and optionally the office.
@@ -28,7 +30,7 @@ class InvoiceApiConnector extends ProcessXmlApiConnector
      * @param string $code
      * @param string $invoiceNumber
      * @param Office $office
-     * @return Invoice|bool The requested invoice or false if it can't be found.
+     * @return Invoice
      * @throws Exception
      */
     public function get(string $code, string $invoiceNumber, Office $office)
@@ -41,7 +43,7 @@ class InvoiceApiConnector extends ProcessXmlApiConnector
             ->setOffice($office->getCode());
 
         // Send the Request document and set the response to this instance
-        $response = $this->sendDocument($request_invoice);
+        $response = $this->sendXmlDocument($request_invoice);
 
         return InvoiceMapper::map($response);
     }
@@ -50,22 +52,33 @@ class InvoiceApiConnector extends ProcessXmlApiConnector
      * Sends a \PhpTwinfield\Invoice\Invoice instance to Twinfield to update or add.
      *
      * @param Invoice $invoice
+     * @return Invoice
      * @throws Exception
      */
-    public function send(Invoice $invoice): void
+    public function send(Invoice $invoice): Invoice
     {
-        $this->sendAll([$invoice]);
+        $invoiceResponses = $this->sendAll([$invoice]);
+
+        Assert::count($invoiceResponses, 1);
+
+        foreach ($invoiceResponses as $invoiceResponse) {
+            return $invoiceResponse->unwrap();
+        }
     }
 
     /**
      * @param Invoice[] $invoices
+     * @return MappedResponseCollection
      * @throws Exception
      */
-    public function sendAll(array $invoices): void
+    public function sendAll(array $invoices): MappedResponseCollection
     {
         Assert::allIsInstanceOf($invoices, Invoice::class);
 
-        foreach ($this->chunk($invoices) as $chunk) {
+        /** @var Response[] $responses */
+        $responses = [];
+
+        foreach ($this->getProcessXmlService()->chunk($invoices) as $chunk) {
 
             $invoicesDocument = new InvoicesDocument();
 
@@ -73,7 +86,11 @@ class InvoiceApiConnector extends ProcessXmlApiConnector
                 $invoicesDocument->addInvoice($invoice);
             }
 
-            $this->sendDocument($invoicesDocument);
+            $responses[] = $this->sendXmlDocument($invoicesDocument);
         }
+
+        return $this->getProcessXmlService()->mapAll($responses, "salesinvoice", function(Response $response): Invoice {
+            return InvoiceMapper::map($response);
+        });
     }
 }

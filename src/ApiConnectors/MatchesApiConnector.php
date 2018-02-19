@@ -2,37 +2,44 @@
 
 namespace PhpTwinfield\ApiConnectors;
 
-use PhpTwinfield\DomDocuments\ElectronicBankStatementDocument;
 use PhpTwinfield\DomDocuments\MatchDocument;
-use PhpTwinfield\ElectronicBankStatement;
 use PhpTwinfield\Exception;
+use PhpTwinfield\Mappers\MatchSetMapper;
 use PhpTwinfield\MatchSet;
+use PhpTwinfield\Response\IndividualMappedResponse;
+use PhpTwinfield\Response\MappedResponseCollection;
+use PhpTwinfield\Response\Response;
 use Webmozart\Assert\Assert;
 
 /**
  * A facade to make interaction with the the Twinfield service easier when trying to retrieve or send information about
  * matching.
  */
-class MatchesApiConnector extends ProcessXmlApiConnector
+class MatchesApiConnector extends BaseApiConnector
 {
     /**
      * @param MatchSet $matchSet
+     *
      * @throws Exception
      */
-    public function send(MatchSet $matchSet): void
+    public function send(MatchSet $matchSet): MatchSet
     {
-        $this->sendAll([$matchSet]);
+        return $this->sendAll([$matchSet])[0]->unwrap();
     }
 
     /**
-     * @param MatchSet[] $matchSets
+     * @return MappedResponseCollection|IndividualMappedResponse[]
+     *
      * @throws Exception
      */
-    public function sendAll(array $matchSets)
+    public function sendAll(array $matchSets): MappedResponseCollection
     {
         Assert::allIsInstanceOf($matchSets, MatchSet::class);
 
-        foreach ($this->chunk($matchSets) as $chunk) {
+        /** @var Response[] $responses */
+        $responses = [];
+
+        foreach ($this->getProcessXmlService()->chunk($matchSets) as $chunk) {
 
             $document = new MatchDocument();
 
@@ -40,7 +47,11 @@ class MatchesApiConnector extends ProcessXmlApiConnector
                 $document->addMatchSet($matchSet);
             }
 
-            $this->sendDocument($document);
+            $responses[] = $this->sendXmlDocument($document);
         }
+
+        return $this->getProcessXmlService()->mapAll($responses, "set", function (Response $subResponse): MatchSet {
+            return MatchSetMapper::map($subResponse->getResponseDocument());
+        });
     }
 }

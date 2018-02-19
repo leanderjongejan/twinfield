@@ -11,24 +11,39 @@ use PhpTwinfield\Customer;
 use PhpTwinfield\Enums\Destiny;
 use PhpTwinfield\Exception;
 use PhpTwinfield\Response\Response;
-use PhpTwinfield\Secure\Connection;
+use PhpTwinfield\Secure\AuthenticatedConnection;
+use PhpTwinfield\Services\ProcessXmlService;
 use PHPUnit\Framework\TestCase;
 
 class CustomerApiConnectorTest extends TestCase
 {
     /**
-     * @var CustomerApiConnector|\PHPUnit_Framework_MockObject_MockObject
+     * @var CustomerApiConnector
      */
     protected $apiConnector;
+
+    /**
+     * @var ProcessXmlService|\PHPUnit_Framework_MockObject_MockObject
+     */
+    protected $processXmlService;
 
     protected function setUp()
     {
         parent::setUp();
 
-        $this->apiConnector = $this->getMockBuilder(CustomerApiConnector::class)
+        $this->processXmlService = $this->getMockBuilder(ProcessXmlService::class)
             ->setMethods(["sendDocument"])
-            ->setConstructorArgs([$this->createMock(Connection::class)])
+            ->disableOriginalConstructor()
             ->getMock();
+
+        /** @var AuthenticatedConnection|\PHPUnit_Framework_MockObject_MockObject $connection */
+        $connection = $this->createMock(AuthenticatedConnection::class);
+        $connection
+            ->expects($this->any())
+            ->method("getAuthenticatedClient")
+            ->willReturn($this->processXmlService);
+
+        $this->apiConnector = new CustomerApiConnector($connection);
     }
 
     private function createCustomer(): Customer
@@ -43,7 +58,7 @@ class CustomerApiConnectorTest extends TestCase
             __DIR__."/resources/customers-response.xml"
         ));
 
-        $this->apiConnector->expects($this->once())
+        $this->processXmlService->expects($this->once())
             ->method("sendDocument")
             ->willReturn($response);
 

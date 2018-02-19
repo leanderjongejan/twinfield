@@ -8,6 +8,8 @@ use PhpTwinfield\Exception;
 use PhpTwinfield\Mappers\ArticleMapper;
 use PhpTwinfield\Office;
 use PhpTwinfield\Request as Request;
+use PhpTwinfield\Response\MappedResponseCollection;
+use PhpTwinfield\Response\Response;
 use Webmozart\Assert\Assert;
 
 /**
@@ -19,7 +21,7 @@ use Webmozart\Assert\Assert;
  *
  * @author Willem van de Sande <W.vandeSande@MailCoupon.nl>
  */
-class ArticleApiConnector extends ProcessXmlApiConnector
+class ArticleApiConnector extends BaseApiConnector
 {
     /**
      * Requests a specific Article based off the passed in code and optionally the office.
@@ -39,7 +41,7 @@ class ArticleApiConnector extends ProcessXmlApiConnector
             ->setCode($code);
 
         // Send the Request document and set the response to this instance.
-        $response = $this->sendDocument($request_article);
+        $response = $this->sendXmlDocument($request_article);
 
         return ArticleMapper::map($response);
     }
@@ -48,22 +50,33 @@ class ArticleApiConnector extends ProcessXmlApiConnector
      * Sends an Article instance to Twinfield to update or add.
      *
      * @param Article $article
+     * @return Article
      * @throws Exception
      */
-    public function send(Article $article): void
+    public function send(Article $article): Article
     {
-        $this->sendAll([$article]);
+        $articleResponses = $this->sendAll([$article]);
+
+        Assert::count($articleResponses, 1);
+
+        foreach ($articleResponses as $articleResponse) {
+            return $articleResponse->unwrap();
+        }
     }
 
     /**
      * @param Article[] $articles
+     * @return MappedResponseCollection
      * @throws Exception
      */
-    public function sendAll(array $articles): void
+    public function sendAll(array $articles): MappedResponseCollection
     {
         Assert::allIsInstanceOf($articles, Article::class);
 
-        foreach ($this->chunk($articles) as $chunk) {
+        /** @var Response[] $responses */
+        $responses = [];
+
+        foreach ($this->getProcessXmlService()->chunk($articles) as $chunk) {
 
             $articlesDocument = new ArticlesDocument();
 
@@ -71,7 +84,11 @@ class ArticleApiConnector extends ProcessXmlApiConnector
                 $articlesDocument->addArticle($article);
             }
 
-            $this->sendDocument($articlesDocument);
+            $responses[] = $this->sendXmlDocument($articlesDocument);
         }
+
+        return $this->getProcessXmlService()->mapAll($responses, "article", function(Response $response): Article {
+            return ArticleMapper::map($response);
+        });
     }
 }

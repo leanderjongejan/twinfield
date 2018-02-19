@@ -7,18 +7,28 @@ use Money\Money;
 use PhpTwinfield\ApiConnectors\BankTransactionApiConnector;
 use PhpTwinfield\BankTransaction;
 use PhpTwinfield\Enums\Destiny;
+use PhpTwinfield\Enums\LineType;
 use PhpTwinfield\Exception;
 use PhpTwinfield\Office;
 use PhpTwinfield\Response\Response;
-use PhpTwinfield\Secure\Connection;
+use PhpTwinfield\Secure\AuthenticatedConnection;
+use PhpTwinfield\Services\ProcessXmlService;
+use PhpTwinfield\Transactions\BankTransactionLine\Detail;
+use PhpTwinfield\Transactions\BankTransactionLine\Total;
+use PhpTwinfield\Transactions\BankTransactionLine\Vat;
 use PHPUnit\Framework\TestCase;
 
 class BankTransactionApiConnectorTest extends TestCase
 {
     /**
-     * @var BankTransactionApiConnector|\PHPUnit_Framework_MockObject_MockObject
+     * @var BankTransactionApiConnector
      */
     protected $apiConnector;
+
+    /**
+     * @var ProcessXmlService|\PHPUnit_Framework_MockObject_MockObject
+     */
+    protected $processXmlService;
 
     /**
      * @var Office
@@ -29,11 +39,19 @@ class BankTransactionApiConnectorTest extends TestCase
     {
         parent::setUp();
 
-        $this->apiConnector = $this->getMockBuilder(BankTransactionApiConnector::class)
+        $this->processXmlService = $this->getMockBuilder(ProcessXmlService::class)
             ->setMethods(["sendDocument"])
-            ->setConstructorArgs([$this->createMock(Connection::class)])
+            ->disableOriginalConstructor()
             ->getMock();
 
+        /** @var AuthenticatedConnection|\PHPUnit_Framework_MockObject_MockObject $connection */
+        $connection = $this->createMock(AuthenticatedConnection::class);
+        $connection
+            ->expects($this->any())
+            ->method("getAuthenticatedClient")
+            ->willReturn($this->processXmlService);
+
+        $this->apiConnector = new BankTransactionApiConnector($connection);
         $this->office = Office::fromCode("XXX101");
     }
 
@@ -52,7 +70,7 @@ class BankTransactionApiConnectorTest extends TestCase
             __DIR__."/resources/2-failed-and-1-successful-banktransactions.xml"
         ));
 
-        $this->apiConnector->expects($this->once())
+        $this->processXmlService->expects($this->once())
             ->method("sendDocument")
             ->willReturn($response);
 
@@ -89,5 +107,92 @@ class BankTransactionApiConnectorTest extends TestCase
         $this->assertEquals(Money::EUR(0), $banktransaction3->getClosevalue());
         $this->assertEquals(0, $banktransaction3->getStatementnumber());
         $this->assertEquals("201700334", $banktransaction3->getNumber());
+
+        $lines = $banktransaction3->getLines();
+        $this->assertCount(3, $lines);
+
+        /** @var Total $line */
+        $line = $lines[0];
+        $this->assertEquals("1", $line->getId());
+        $this->assertEquals(LineType::TOTAL(), $line->getLineType());
+        $this->assertEquals("1100", $line->getDim1());
+        $this->assertEquals("debit", $line->getDebitCredit());
+        $this->assertEquals(Money::EUR(0), $line->getValue());
+        $this->assertEquals("2017.123456", $line->getInvoiceNumber());
+        $this->assertEquals("2017.123456", $line->getDescription());
+        $this->assertEquals("2017.123456", $line->getComment());
+
+        /** @var Detail $line */
+        $line = $lines[1];
+        $this->assertEquals("2", $line->getId());
+        $this->assertEquals(LineType::DETAIL(), $line->getLineType());
+        $this->assertEquals("1800", $line->getDim1());
+        $this->assertEquals("debit", $line->getDebitCredit());
+        $this->assertEquals(Money::EUR(87), $line->getValue());
+        $this->assertEquals("2017.123456", $line->getInvoiceNumber());
+        $this->assertEquals("2017.123456", $line->getDescription());
+        $this->assertEquals("2017.123456", $line->getComment());
+    }
+
+    public function testSendAllReturnsMappedObjectsAllLineTypes()
+    {
+        $response = Response::fromString(file_get_contents(
+            __DIR__."/resources/banktransaction-with-all-line-types.xml"
+        ));
+
+        $this->processXmlService->expects($this->once())
+            ->method("sendDocument")
+            ->willReturn($response);
+
+        $responses = $this->apiConnector->sendAll([$this->createBankTransaction()]);
+        $this->assertCount(1, $responses);
+        $response = $responses[0];
+
+        /** @var BankTransaction $banktransaction */
+        $banktransaction = $response->unwrap();
+
+        $this->assertEquals("BNK", $banktransaction->getCode());
+        $this->assertEquals("OFFICE001", $banktransaction->getOffice()->getCode());
+        $this->assertEquals("2017/09", $banktransaction->getPeriod());
+        $this->assertEquals(new Currency("EUR"), $banktransaction->getCurrency());
+        $this->assertEquals(Money::EUR(0), $banktransaction->getStartvalue());
+        $this->assertEquals(Money::EUR(12100), $banktransaction->getClosevalue());
+        $this->assertEquals(0, $banktransaction->getStatementnumber());
+        $this->assertEquals("201700001", $banktransaction->getNumber());
+
+        $lines = $banktransaction->getLines();
+        $this->assertCount(3, $lines);
+
+        /** @var Total $line */
+        $line = $lines[0];
+        $this->assertEquals("1", $line->getId());
+        $this->assertEquals(LineType::TOTAL(), $line->getLineType());
+        $this->assertEquals("1100", $line->getDim1());
+        $this->assertEquals("debit", $line->getDebitCredit());
+        $this->assertEquals(Money::EUR(12100), $line->getValue());
+
+        /** @var Detail $line */
+        $line = $lines[1];
+        $this->assertEquals("2", $line->getId());
+        $this->assertEquals(LineType::DETAIL(), $line->getLineType());
+        $this->assertEquals("2200", $line->getDim1());
+        $this->assertEquals("credit", $line->getDebitCredit());
+        $this->assertEquals(Money::EUR(10000), $line->getValue());
+        $this->assertEquals("My transaction", $line->getDescription());
+        $this->assertEquals("VH", $line->getVatCode());
+        $this->assertEquals(Money::EUR(2100), $line->getVatValue());
+        $this->assertEquals(null, $line->getInvoiceNumber());
+        $this->assertEquals(Money::EUR(2100), $line->getVatBaseValue());
+
+        /** @var Vat $line */
+        $line = $lines[2];
+        $this->assertEquals("3", $line->getId());
+        $this->assertEquals(LineType::VAT(), $line->getLineType());
+        $this->assertEquals("1502", $line->getDim1());
+        $this->assertEquals("credit", $line->getDebitCredit());
+        $this->assertEquals(Money::EUR(2100), $line->getValue());
+        $this->assertEquals("VH", $line->getVatCode());
+        $this->assertEquals(Money::EUR(10000), $line->getVatTurnover());
+        $this->assertEquals(Money::EUR(10000), $line->getVatBaseTurnover());
     }
 }

@@ -5,6 +5,8 @@ namespace PhpTwinfield\ApiConnectors;
 use PhpTwinfield\Exception;
 use PhpTwinfield\Office;
 use PhpTwinfield\Request as Request;
+use PhpTwinfield\Response\MappedResponseCollection;
+use PhpTwinfield\Response\Response;
 use PhpTwinfield\Supplier;
 use PhpTwinfield\DomDocuments\SuppliersDocument;
 use PhpTwinfield\Mappers\SupplierMapper;
@@ -20,7 +22,7 @@ use Webmozart\Assert\Assert;
  * @author Leon Rowland <leon@rowland.nl>
  * @copyright (c) 2013, Pronamic
  */
-class SupplierApiConnector extends ProcessXmlApiConnector
+class SupplierApiConnector extends BaseApiConnector
 {
     /**
      * Requests a specific supplier based off the passed in code and optionally the office.
@@ -38,7 +40,7 @@ class SupplierApiConnector extends ProcessXmlApiConnector
             ->setOffice($office->getCode())
             ->setCode($code);
 
-        $response = $this->sendDocument($request_customer);
+        $response = $this->sendXmlDocument($request_customer);
 
         return SupplierMapper::map($response);
     }
@@ -59,7 +61,7 @@ class SupplierApiConnector extends ProcessXmlApiConnector
         $request_customers = new Request\Catalog\Dimension($office->getCode(), $dimType);
 
         // Send the Request document and set the response to this instance.
-        $response = $this->sendDocument($request_customers);
+        $response = $this->sendXmlDocument($request_customers);
 
         // Get the raw response document
         $responseDOM = $response->getResponseDocument();
@@ -91,11 +93,18 @@ class SupplierApiConnector extends ProcessXmlApiConnector
      * SupplierMapper::map() method.
      *
      * @param Supplier $supplier
+     * @return Supplier
      * @throws Exception
      */
-    public function send(Supplier $supplier): void
+    public function send(Supplier $supplier): Supplier
     {
-        $this->sendAll([$supplier]);
+        $supplierResponses = $this->sendAll([$supplier]);
+
+        Assert::count($supplierResponses, 1);
+
+        foreach ($supplierResponses as $supplierResponse) {
+            return $supplierResponse->unwrap();
+        }
     }
 
 
@@ -103,13 +112,17 @@ class SupplierApiConnector extends ProcessXmlApiConnector
      * Sends a list of Transaction instances to Twinfield to add or update.
      *
      * @param Supplier[] $suppliers
+     * @return MappedResponseCollection
      * @throws Exception
      */
-    public function sendAll(array $suppliers): void
+    public function sendAll(array $suppliers): MappedResponseCollection
     {
         Assert::allIsInstanceOf($suppliers, Supplier::class);
 
-        foreach ($this->chunk($suppliers) as $chunk) {
+        /** @var Response[] $responses */
+        $responses = [];
+
+        foreach ($this->getProcessXmlService()->chunk($suppliers) as $chunk) {
 
             $suppliersDocument = new SuppliersDocument();
 
@@ -117,7 +130,11 @@ class SupplierApiConnector extends ProcessXmlApiConnector
                 $suppliersDocument->addSupplier($supplier);
             }
 
-            $this->sendDocument($suppliersDocument);
+            $responses[] = $this->sendXmlDocument($suppliersDocument);
         }
+
+        return $this->getProcessXmlService()->mapAll($responses, "dimension", function(Response $response): Supplier {
+            return SupplierMapper::map($response);
+        });
     }
 }
