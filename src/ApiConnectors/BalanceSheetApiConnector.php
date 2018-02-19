@@ -14,7 +14,7 @@ use PhpTwinfield\Office;
  *
  * @author Emile Bons <emile@emilebons.nl>
  */
-class BalanceSheetApiConnector extends ProcessXmlApiConnector
+class BalanceSheetApiConnector extends BaseApiConnector
 {
     /**
      * Requests all balance sheets from the List Dimension Type.
@@ -30,7 +30,7 @@ class BalanceSheetApiConnector extends ProcessXmlApiConnector
         $requestBalanceSheets = new Request\Catalog\Dimension($office, $dimType);
 
         // Send the Request document and set the response to this instance.
-        $response = $this->sendDocument($requestBalanceSheets);
+        $response = $this->sendXmlDocument($requestBalanceSheets);
 
         // Get the raw response document
         $responseDOM = $response->getResponseDocument();
