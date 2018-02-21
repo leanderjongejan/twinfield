@@ -1,6 +1,7 @@
 <?php
 namespace PhpTwinfield\Mappers;
 
+use PhpTwinfield\Enums\PerformanceType;
 use PhpTwinfield\Invoice;
 use PhpTwinfield\InvoiceLine;
 use PhpTwinfield\InvoiceTotals;
@@ -105,7 +106,12 @@ class InvoiceMapper
                 $_tag = $lineDOM->getElementsByTagName($tag)->item(0);
 
                 if (isset($_tag) && !empty($_tag->textContent)) {
-                    $temp_line->$method($_tag->textContent);
+
+                    if($tag === 'performancetype') {
+                        $temp_line->$method(new PerformanceType($_tag->textContent));
+                    } else {
+                        $temp_line->$method($_tag->textContent);
+                    }
                 }
             }
 
