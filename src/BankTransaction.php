@@ -7,15 +7,14 @@ use Money\Money;
 use PhpTwinfield\Enums\DebitCredit;
 use PhpTwinfield\Enums\LineType;
 use PhpTwinfield\Transactions\Transaction;
-use PhpTwinfield\Transactions\TransactionFields\CodeNumberOfficeFields;
-use PhpTwinfield\Transactions\TransactionFields\LinesField;
-use PhpTwinfield\Transactions\TransactionFields\RaiseWarningField;
-use PhpTwinfield\Transactions\TransactionFields\StatementNumberField;
 use PhpTwinfield\Transactions\TransactionFields\AutoBalanceVatField;
+use PhpTwinfield\Transactions\TransactionFields\CodeNumberOfficeFields;
 use PhpTwinfield\Transactions\TransactionFields\DestinyField;
 use PhpTwinfield\Transactions\TransactionFields\FreeTextFields;
-use PhpTwinfield\Transactions\TransactionFields\OfficeField;
+use PhpTwinfield\Transactions\TransactionFields\LinesField;
+use PhpTwinfield\Transactions\TransactionFields\RaiseWarningField;
 use PhpTwinfield\Transactions\TransactionFields\StartAndCloseValueFields;
+use PhpTwinfield\Transactions\TransactionFields\StatementNumberField;
 use PhpTwinfield\Transactions\TransactionLineFields\DateField;
 use PhpTwinfield\Transactions\TransactionLineFields\PeriodField;
 use Webmozart\Assert\Assert;
@@ -99,7 +98,7 @@ class BankTransaction implements Transaction
         /*
          * Max is 500 lines. 
          */
-        Assert::lessThanEq(count($this->getLines()), 500);
+        Assert::lessThan($this->getLineCount(), 500);
 
         /*
          * Calls the addLine() method on the LinesField trait. Uses an alias in the `use` statement at top of this

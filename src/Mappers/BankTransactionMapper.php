@@ -1,15 +1,15 @@
 <?php
 namespace PhpTwinfield\Mappers;
 
+use PhpTwinfield\BankTransaction;
+use PhpTwinfield\Enums\DebitCredit;
+use PhpTwinfield\Enums\LineType;
 use PhpTwinfield\Enums\PerformanceType;
 use PhpTwinfield\Office;
 use PhpTwinfield\Transactions\BankTransactionLine\Base;
 use PhpTwinfield\Transactions\BankTransactionLine\Detail;
 use PhpTwinfield\Transactions\BankTransactionLine\Total;
 use PhpTwinfield\Transactions\BankTransactionLine\Vat;
-use PhpTwinfield\BankTransaction;
-use PhpTwinfield\Enums\DebitCredit;
-use PhpTwinfield\Enums\LineType;
 use PhpTwinfield\Util;
 
 class BankTransactionMapper extends BaseMapper
@@ -149,7 +149,15 @@ class BankTransactionMapper extends BaseMapper
         \DOMElement $lineElement,
         Base $line
     ): void {
-        $line->setId($lineElement->getAttribute("id"));
+        /*
+         * When a bank transaction fails, it isn't created at Twinfield, so it is likely that they haven't generated
+         * any ids for the lines.
+         */
+        $id = $lineElement->getAttribute("id");
+        if (!empty($id)) {
+            $line->setId($id);
+        }
+
         $value = self::getField($lineElement, 'value');
         $line->setValue(Util::parseMoney($value, $bankTransaction->getCurrency()));
         $line->setInvoiceNumber(self::getField($lineElement, "invoicenumber"));
