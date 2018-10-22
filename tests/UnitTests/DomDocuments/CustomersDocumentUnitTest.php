@@ -91,7 +91,7 @@ class CustomersDocumentUnitTest extends TestCase
 
         $customer = new Customer();
         $customer->setCode('D654321');
-        $customer->setName('Nuck CHorris');
+        $customer->setName('Nuck Chorris');
         $customer->setWebsite('http://example.org');
         $customer->setOffice(Office::fromCode("DEV-00001"));
         $customer->setStatus('deleted');
@@ -127,7 +127,7 @@ class CustomersDocumentUnitTest extends TestCase
             <comment>comment    comment</comment>
         </creditmanagement>
         <addresses>
-            <address default="1" type="invoice">
+            <address default="true" type="invoice">
                 <name>My Address</name>
                 <contact>My Contact</contact>
                 <country>nl</country>
@@ -145,7 +145,7 @@ class CustomersDocumentUnitTest extends TestCase
             </address>
         </addresses>
         <banks>
-            <bank default="1">
+            <bank default="true">
                 <ascription>ascriptor</ascription>
                 <accountnumber>account number</accountnumber>
                 <bankname>bank name</bankname>

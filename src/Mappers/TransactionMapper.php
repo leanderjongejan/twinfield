@@ -2,23 +2,26 @@
 
 namespace PhpTwinfield\Mappers;
 
+use Money\Currency;
 use Money\Money;
 use PhpTwinfield\BaseTransaction;
 use PhpTwinfield\BaseTransactionLine;
+use PhpTwinfield\CashTransaction;
 use PhpTwinfield\Enums\DebitCredit;
 use PhpTwinfield\Enums\Destiny;
 use PhpTwinfield\Enums\LineType;
 use PhpTwinfield\Enums\PerformanceType;
 use PhpTwinfield\Exception;
 use PhpTwinfield\JournalTransaction;
-use PhpTwinfield\JournalTransactionLine;
 use PhpTwinfield\Message\Message;
 use PhpTwinfield\Office;
 use PhpTwinfield\Response\Response;
 use PhpTwinfield\SalesTransaction;
 use PhpTwinfield\Transactions\TransactionFields\DueDateField;
+use PhpTwinfield\Transactions\TransactionFields\FreeTextFields;
 use PhpTwinfield\Transactions\TransactionFields\InvoiceNumberField;
 use PhpTwinfield\Transactions\TransactionFields\PaymentReferenceField;
+use PhpTwinfield\Transactions\TransactionFields\StatementNumberField;
 use PhpTwinfield\Transactions\TransactionLineFields\PerformanceFields;
 use PhpTwinfield\Transactions\TransactionLineFields\ValueOpenField;
 use PhpTwinfield\Transactions\TransactionLineFields\VatTotalFields;
@@ -83,12 +86,16 @@ class TransactionMapper
             ->setOffice($office)
             ->setCode(self::getField($transaction, $transactionElement, 'code'))
             ->setPeriod(self::getField($transaction, $transactionElement, 'period'))
-            ->setCurrency(self::getField($transaction, $transactionElement, 'currency'))
             ->setDateFromString(self::getField($transaction, $transactionElement, 'date'))
             ->setOrigin(self::getField($transaction, $transactionElement, 'origin'))
             ->setFreetext1(self::getField($transaction, $transactionElement, 'freetext1'))
             ->setFreetext2(self::getField($transaction, $transactionElement, 'freetext2'))
             ->setFreetext3(self::getField($transaction, $transactionElement, 'freetext3'));
+
+        $currency = self::getField($transaction, $transactionElement, 'currency');
+        if (!empty($currency)) {
+            $transaction->setCurrency(new Currency($currency));
+        }
 
         $number = self::getField($transaction, $transactionElement, 'number');
         if (!empty($number)) {
@@ -105,12 +112,23 @@ class TransactionMapper
             $transaction
                 ->setPaymentReference(self::getField($transaction, $transactionElement, 'paymentreference'));
         }
+        if (Util::objectUses(StatementNumberField::class, $transaction)) {
+            $transaction->setStatementnumber(self::getField($transaction, $transactionElement, 'statementnumber'));
+        }
 
         if ($transaction instanceof SalesTransaction) {
             $transaction->setOriginReference(self::getField($transaction, $transactionElement, 'originreference'));
         }
         if ($transaction instanceof JournalTransaction) {
             $transaction->setRegime(self::getField($transaction, $transactionElement, 'regime'));
+        }
+        if ($transaction instanceof CashTransaction) {
+            $transaction->setStartvalue(
+                Util::parseMoney(
+                    self::getField($transaction, $transactionElement, 'startvalue'),
+                    $transaction->getCurrency()
+                )
+            );
         }
 
         // Parse the transaction lines
@@ -155,6 +173,23 @@ class TransactionMapper
                 $transactionLine->setBaseline($baseline);
             }
 
+            if (Util::objectUses(FreeTextFields::class, $transactionLine)) {
+                $freetext1 = self::getField($transaction, $lineElement, 'freetext1');
+                if ($freetext1) {
+                    $transactionLine->setFreetext1($freetext1);
+                }
+
+                $freetext2 = self::getField($transaction, $lineElement, 'freetext2');
+                if ($freetext2) {
+                    $transactionLine->setFreetext2($freetext2);
+                }
+
+                $freetext3 = self::getField($transaction, $lineElement, 'freetext3');
+                if ($freetext3) {
+                    $transactionLine->setFreetext3($freetext3);
+                }
+            }
+
             if (Util::objectUses(PerformanceFields::class, $transactionLine)) {
                 /** @var BaseTransactionLine|PerformanceFields $transactionLine */
                 $performanceType = self::getField($transaction, $lineElement, 'performancetype');
@@ -187,9 +222,12 @@ class TransactionMapper
                     $transactionLine->setVatBaseTotal(Money::EUR(100 * $vatBaseTotal));
                 }
             }
-
-            if ($transactionLine instanceof JournalTransactionLine) {
-                $transactionLine->setInvoiceNumber(self::getField($transaction, $lineElement, 'invoicenumber'));
+            if (Util::objectUses(InvoiceNumberField::class, $transactionLine)) {
+                /** @var InvoiceNumberField $transactionLine */
+                $invoiceNumber = self::getField($transaction, $lineElement, 'invoicenumber');
+                if ($invoiceNumber) {
+                    $transactionLine->setInvoiceNumber(self::getField($transaction, $lineElement, 'invoicenumber'));
+                }
             }
 
             $transaction->addLine($transactionLine);

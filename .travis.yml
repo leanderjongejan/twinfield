@@ -4,6 +4,12 @@ dist: trusty
 php:
 - 7.1
 - 7.2
+- nightly
+
+matrix:
+  fast_finish: true
+  allow_failures:
+  - php: nightly
 
 sudo: false
 
@@ -17,4 +23,6 @@ install:
 script:
 - composer validate --strict
 - find src tests -name '*.php' | xargs -n 1 -P4 php -l
+- vendor/bin/dependency-guard
 - vendor/bin/phpunit --fail-on-risky
+- vendor/bin/phpstan analyse --level 0 src tests

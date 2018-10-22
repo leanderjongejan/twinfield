@@ -2,6 +2,7 @@
 
 namespace PhpTwinfield\IntegrationTests;
 
+use Money\Currency;
 use Money\Money;
 use PhpTwinfield\ApiConnectors\TransactionApiConnector;
 use PhpTwinfield\DomDocuments\TransactionsDocument;
@@ -56,7 +57,7 @@ class JournalTransactionIntegrationTest extends BaseIntegrationTest
         $this->assertSame('MEMO', $journalTransaction->getCode());
         $this->assertSame(201300003, $journalTransaction->getNumber());
         $this->assertSame('2013/11', $journalTransaction->getPeriod());
-        $this->assertSame('EUR', $journalTransaction->getCurrency());
+        $this->assertEquals(new Currency('EUR'), $journalTransaction->getCurrency());
         $this->assertEquals(new \DateTimeImmutable('2013-11-04'), $journalTransaction->getDate());
         $this->assertSame('import', $journalTransaction->getOrigin());
         $this->assertNull($journalTransaction->getFreetext1());
@@ -89,7 +90,7 @@ class JournalTransactionIntegrationTest extends BaseIntegrationTest
         $this->assertNull($detailLine1->getPerformanceCountry());
         $this->assertNull($detailLine1->getPerformanceVatNumber());
         $this->assertNull($detailLine1->getPerformanceDate());
-        $this->assertSame('', $detailLine1->getInvoiceNumber());
+        $this->assertNull($detailLine1->getInvoiceNumber());
 
         $this->assertEquals(LineType::DETAIL(), $detailLine2->getLineType());
         $this->assertSame(2, $detailLine2->getId());
@@ -120,7 +121,7 @@ class JournalTransactionIntegrationTest extends BaseIntegrationTest
         $journalTransaction
             ->setDestiny(Destiny::TEMPORARY())
             ->setCode('MEMO')
-            ->setCurrency('EUR')
+            ->setCurrency(new Currency('EUR'))
             ->setDate(new \DateTimeImmutable('2013-11-04'))
             ->setOffice(Office::fromCode('001'));
 
